@@ -14,7 +14,7 @@ CORP_ID = os.environ.get("CORP_ID", "ww122e71f4c8e0fd1b")
 APP_SECRET = os.environ.get("APP_SECRET", "tCpJb6DdCT3UsQKp1TsGQZP0u6Kvpdxei58qffT5WUQ")
 AGENT_ID = os.environ.get("AGENT_ID", "1000003")  # 保持字符串类型
 # 企业微信OAuth2.0配置
-REDIRECT_HOST = os.environ.get("REDIRECT_HOST", "testschedule.ncu.edu.cn")  # 替换为你的公网域名
+REDIRECT_HOST = os.environ.get("REDIRECT_HOST", "https://testschedule.ncu.edu.cn")  # 使用企业微信配置的域名
 OAUTH2_CALLBACK = f"{REDIRECT_HOST}/oauth_callback"
 OAUTH2_SCOPE = "snsapi_privateinfo"  # 获取用户信息需要这个scope
 # ===========================================
@@ -162,5 +162,5 @@ def do_sync():
 
 # ================= 启动配置 =================
 if __name__ == "__main__":
-    port = int(os.environ.get("PORT", 80))
+    port = int(os.environ.get("PORT", 80))  # 云托管默认使用80端口
     app.run(host="0.0.0.0", port=port, debug=True)
