@@ -14,7 +14,7 @@ CORP_ID = os.environ.get("CORP_ID", "ww122e71f4c8e0fd1b")
 APP_SECRET = os.environ.get("APP_SECRET", "tCpJb6DdCT3UsQKp1TsGQZP0u6Kvpdxei58qffT5WUQ")
 AGENT_ID = os.environ.get("AGENT_ID", "1000003")  # 保持字符串类型
 # 企业微信OAuth2.0配置
-REDIRECT_HOST = os.environ.get("REDIRECT_HOST", "https://flask-d6y7-287928-10-1459300841.sh.run.tcloudbase.com")  # 替换为你的公网域名
+REDIRECT_HOST = os.environ.get("REDIRECT_HOST", "testschedule.ncu.edu.cn")  # 替换为你的公网域名
 OAUTH2_CALLBACK = f"{REDIRECT_HOST}/oauth_callback"
 OAUTH2_SCOPE = "snsapi_privateinfo"  # 获取用户信息需要这个scope
 # ===========================================
