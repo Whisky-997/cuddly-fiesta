@@ -34,6 +34,11 @@ def get_next_week_timestamp(weekday, time_str):
     target_dt = target_date.replace(hour=int(time_parts[0]), minute=int(time_parts[1]), second=0)
     return int(target_dt.timestamp())
 
+# CSS样式模板（避免与格式化冲突）
+STYLE_CSS = '''
+<style>body{font-family:sans-serif; text-align:center; padding:20px; background-color:#f6f6f6;} .container{background:white; padding:20px; border-radius:10px; margin-top:50px;} h1{color:#333; font-size:20px;} p{color:#666; font-size:14px;} .btn{display:inline-block; background-color:#07C160; color:white; padding:15px 40px; text-decoration:none; border-radius:8px; font-size:18px; margin-top:20px; border:none;}</style>
+'''
+
 @app.route('/')
 def index():
     # 检查用户是否已授权
@@ -46,25 +51,25 @@ def index():
             f"https://open.weixin.qq.com/connect/oauth2/authorize?"
             f"appid={CORP_ID}&redirect_uri={OAUTH2_CALLBACK}&response_type=code&scope={OAUTH2_SCOPE}&state={state}#wechat_redirect"
         )
-        return '''
+        return f'''
         <!DOCTYPE html>
         <html>
         <head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>课表同步</title>
-        <style>body{font-family:sans-serif; text-align:center; padding:20px; background-color:#f6f6f6;} .container{background:white; padding:20px; border-radius:10px; margin-top:50px;} h1{color:#333; font-size:20px;} p{color:#666; font-size:14px;} .btn{display:inline-block; background-color:#07C160; color:white; padding:15px 40px; text-decoration:none; border-radius:8px; font-size:18px; margin-top:20px; border:none;}</style>
+        {STYLE_CSS}
         </head>
-        <body><div class="container"><h1>📅 课表同步助手</h1><p>请先授权登录，然后同步课程到日程</p><a href="{}" class="btn">授权登录</a></div></body>
+        <body><div class="container"><h1>📅 课表同步助手</h1><p>请先授权登录，然后同步课程到日程</p><a href="{oauth_url}" class="btn">授权登录</a></div></body>
         </html>
-        '''.format(oauth_url)
+        '''
     else:
-        return '''
+        return f'''
         <!DOCTYPE html>
         <html>
         <head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>课表同步</title>
-        <style>body{font-family:sans-serif; text-align:center; padding:20px; background-color:#f6f6f6;} .container{background:white; padding:20px; border-radius:10px; margin-top:50px;} h1{color:#333; font-size:20px;} p{color:#666; font-size:14px;} .btn{display:inline-block; background-color:#07C160; color:white; padding:15px 40px; text-decoration:none; border-radius:8px; font-size:18px; margin-top:20px; border:none;}</style>
+        {STYLE_CSS}
         </head>
-        <body><div class="container"><h1>📅 课表同步助手</h1><p>已授权用户: {}</p><a href="/do_sync" class="btn">一键同步日程</a></div></body>
+        <body><div class="container"><h1>📅 课表同步助手</h1><p>已授权用户: {session.get('user_name', '未知用户')}</p><a href="/do_sync" class="btn">一键同步日程</a></div></body>
         </html>
-        '''.format(session.get('user_name', '未知用户'))
+        '''
 
 @app.route('/oauth_callback')
 def oauth_callback():
