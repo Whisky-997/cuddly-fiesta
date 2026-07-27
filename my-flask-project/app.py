@@ -11,7 +11,7 @@ app.secret_key = str(uuid.uuid4())  # 生成随机密钥用于session
 # 1. 优先从环境变量读取（安全），如果没有则使用默认值（方便本地调试）
 CORP_ID = os.environ.get("CORP_ID", "ww122e71f4c8e0fd1b")
 APP_SECRET = os.environ.get("APP_SECRET", "tCpJb6DdCT3UsQKp1TsGQZP0u6Kvpdxei58qffT5WUQ")
-AGENT_ID = int(os.environ.get("AGENT_ID", "1000003"))
+AGENT_ID = os.environ.get("AGENT_ID", "1000003")  # 保持字符串类型
 # 企业微信OAuth2.0配置
 REDIRECT_HOST = os.environ.get("REDIRECT_HOST", "https://flask-d6y7-287928-10-1459300841.sh.run.tcloudbase.com")  # 替换为你的公网域名
 OAUTH2_CALLBACK = f"{REDIRECT_HOST}/oauth_callback"
@@ -22,7 +22,7 @@ def get_access_token():
     url = f"https://qyapi.weixin.qq.com/cgi-bin/gettoken?corpid={CORP_ID}&corpsecret={APP_SECRET}"
     r = requests.get(url).json()
     if r['errcode'] == 0: return r['access_token']
-    raise Exception("Token获取失败")
+    raise Exception(f"Token获取失败: {r.get('errmsg', '未知错误')}")
 
 def get_next_week_timestamp(weekday, time_str):
     now = datetime.now()
@@ -81,22 +81,27 @@ def oauth_callback():
     if state != session.get('oauth2_state'):
         return "❌ 授权失败：无效的state参数"
     
-    # 获取access_token
-    token_url = f"https://qyapi.weixin.qq.com/cgi-bin/user/getuserinfo?access_token={get_access_token()}&code={code}&agentid={AGENT_ID}"
-    resp = requests.get(token_url).json()
-    
-    if resp['errcode'] == 0:
-        # 获取用户信息
-        user_id = resp['UserId']
-        user_name = resp.get('UserName', '未知用户')
+    try:
+        # 获取access_token
+        token_url = f"https://qyapi.weixin.qq.com/cgi-bin/user/getuserinfo?access_token={get_access_token()}&code={code}&agentid={AGENT_ID}"
+        resp = requests.get(token_url).json()
         
-        # 存储用户信息到session
-        session['user_id'] = user_id
-        session['user_name'] = user_name
+        print(f"getuserinfo响应: {resp}")  # 调试信息
         
-        return redirect('/')
-    else:
-        return f"❌ 授权失败: {resp['errmsg']}"
+        if resp['errcode'] == 0:
+            # 获取用户信息
+            user_id = resp['UserId']
+            user_name = resp.get('UserName', '未知用户')
+            
+            # 存储用户信息到session
+            session['user_id'] = user_id
+            session['user_name'] = user_name
+            
+            return redirect('/')
+        else:
+            return f"❌ 授权失败: {resp.get('errmsg', '未知错误')}"
+    except Exception as e:
+        return f"❌ 授权异常: {str(e)}"
 
 @app.route('/do_sync')
 def do_sync():
@@ -131,15 +136,16 @@ def do_sync():
                 "reminders": { "is_remind": 1, "remind_before_event_secs": 900 },
                 "attendees": [{ "userid": session['user_id'] }]  # 使用session中的用户ID
             },
-            "agentid": AGENT_ID
+            "agentid": AGENT_ID  # 确保agentid为字符串
         }
 
         resp = requests.post(url, json=data).json()
+        print(f"schedule/add响应: {resp}")  # 调试信息
 
         if resp['errcode'] == 0:
             return '<html><body style="text-align:center; padding:50px;"><h2 style="color:green;">✅ 同步成功！</h2><p>请打开企业微信日历查看。</p><a href="/">返回首页</a></body></html>'
         else:
-            return f"❌ 同步失败: {resp['errmsg']}"
+            return f"❌ 同步失败: {resp.get('errmsg', '未知错误')}"
 
     except Exception as e:
         return f"⚠️ 服务器错误: {str(e)}"
