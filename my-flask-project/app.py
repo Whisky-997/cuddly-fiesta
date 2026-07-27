@@ -3,6 +3,7 @@ import requests
 from flask import Flask, request, redirect, session, jsonify
 from datetime import datetime, timedelta
 import uuid
+import json
 
 app = Flask(__name__)
 app.secret_key = str(uuid.uuid4())  # 生成随机密钥用于session
@@ -21,7 +22,9 @@ OAUTH2_SCOPE = "snsapi_privateinfo"  # 获取用户信息需要这个scope
 def get_access_token():
     url = f"https://qyapi.weixin.qq.com/cgi-bin/gettoken?corpid={CORP_ID}&corpsecret={APP_SECRET}"
     r = requests.get(url).json()
-    if r['errcode'] == 0: return r['access_token']
+    if r['errcode'] == 0: 
+        print(f"获取access_token成功: {r['access_token'][:10]}...")  # 调试信息
+        return r['access_token']
     raise Exception(f"Token获取失败: {r.get('errmsg', '未知错误')}")
 
 def get_next_week_timestamp(weekday, time_str):
@@ -83,10 +86,13 @@ def oauth_callback():
     
     try:
         # 获取access_token
-        token_url = f"https://qyapi.weixin.qq.com/cgi-bin/user/getuserinfo?access_token={get_access_token()}&code={code}&agentid={AGENT_ID}"
-        resp = requests.get(token_url).json()
+        token = get_access_token()
+        print(f"使用token: {token[:10]}...")  # 调试信息
         
-        print(f"getuserinfo响应: {resp}")  # 调试信息
+        # 获取用户信息
+        token_url = f"https://qyapi.weixin.qq.com/cgi-bin/user/getuserinfo?access_token={token}&code={code}&agentid={AGENT_ID}"
+        resp = requests.get(token_url).json()
+        print(f"getuserinfo响应: {json.dumps(resp, indent=2)}")  # 调试信息
         
         if resp['errcode'] == 0:
             # 获取用户信息
@@ -111,6 +117,8 @@ def do_sync():
     
     try:
         token = get_access_token()
+        print(f"使用token: {token[:10]}...")  # 调试信息
+        
         url = f"https://qyapi.weixin.qq.com/cgi-bin/oa/schedule/add?access_token={token}"
 
         # 这里可以接入数据库或表单获取真实课程数据
@@ -139,8 +147,10 @@ def do_sync():
             "agentid": AGENT_ID  # 确保agentid为字符串
         }
 
+        print(f"发送的请求数据: {json.dumps(data, indent=2)}")  # 调试信息
+        
         resp = requests.post(url, json=data).json()
-        print(f"schedule/add响应: {resp}")  # 调试信息
+        print(f"schedule/add响应: {json.dumps(resp, indent=2)}")  # 调试信息
 
         if resp['errcode'] == 0:
             return '<html><body style="text-align:center; padding:50px;"><h2 style="color:green;">✅ 同步成功！</h2><p>请打开企业微信日历查看。</p><a href="/">返回首页</a></body></html>'
