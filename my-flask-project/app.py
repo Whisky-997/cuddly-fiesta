@@ -12,20 +12,23 @@ app.secret_key = str(uuid.uuid4())  # 生成随机密钥用于session
 # 1. 优先从环境变量读取（安全），如果没有则使用默认值（方便本地调试）
 CORP_ID = os.environ.get("CORP_ID", "ww122e71f4c8e0fd1b")
 APP_SECRET = os.environ.get("APP_SECRET", "tCpJb6DdCT3UsQKp1TsGQZP0u6Kvpdxei58qffT5WUQ")
-AGENT_ID = os.environ.get("AGENT_ID", "1000003")  # 保持字符串类型
+AGENT_ID = os.environ.get("AGENT_ID", "1000003")  # 环境变量读取为字符串；在JSON body中需转为整型
 # 企业微信OAuth2.0配置
 REDIRECT_HOST = os.environ.get("REDIRECT_HOST", "https://testschedule.ncu.edu.cn")  # 使用企业微信配置的域名
 OAUTH2_CALLBACK = f"{REDIRECT_HOST}/oauth_callback"
 OAUTH2_SCOPE = "snsapi_privateinfo"  # 获取用户信息需要这个scope
+
+
 # ===========================================
 
 def get_access_token():
     url = f"https://qyapi.weixin.qq.com/cgi-bin/gettoken?corpid={CORP_ID}&corpsecret={APP_SECRET}"
     r = requests.get(url).json()
-    if r['errcode'] == 0: 
+    if r['errcode'] == 0:
         print(f"获取access_token成功: {r['access_token'][:10]}...")  # 调试信息
         return r['access_token']
     raise Exception(f"Token获取失败: {r.get('errmsg', '未知错误')}")
+
 
 def get_next_week_timestamp(weekday, time_str):
     now = datetime.now()
@@ -37,10 +40,12 @@ def get_next_week_timestamp(weekday, time_str):
     target_dt = target_date.replace(hour=int(time_parts[0]), minute=int(time_parts[1]), second=0)
     return int(target_dt.timestamp())
 
+
 # CSS样式模板（避免与格式化冲突）
 STYLE_CSS = '''
 <style>body{font-family:sans-serif; text-align:center; padding:20px; background-color:#f6f6f6;} .container{background:white; padding:20px; border-radius:10px; margin-top:50px;} h1{color:#333; font-size:20px;} p{color:#666; font-size:14px;} .btn{display:inline-block; background-color:#07C160; color:white; padding:15px 40px; text-decoration:none; border-radius:8px; font-size:18px; margin-top:20px; border:none;}</style>
 '''
+
 
 @app.route('/')
 def index():
@@ -74,51 +79,53 @@ def index():
         </html>
         '''
 
+
 @app.route('/oauth_callback')
 def oauth_callback():
     # 获取授权code和state
     code = request.args.get('code')
     state = request.args.get('state')
-    
+
     # 验证state防止CSRF攻击
     if state != session.get('oauth2_state'):
         return "❌ 授权失败：无效的state参数"
-    
+
     try:
         # 获取access_token
         token = get_access_token()
         print(f"使用token: {token[:10]}...")  # 调试信息
-        
+
         # 获取用户信息
         token_url = f"https://qyapi.weixin.qq.com/cgi-bin/user/getuserinfo?access_token={token}&code={code}&agentid={AGENT_ID}"
         resp = requests.get(token_url).json()
         print(f"getuserinfo响应: {json.dumps(resp, indent=2)}")  # 调试信息
-        
+
         if resp['errcode'] == 0:
             # 获取用户信息
             user_id = resp['UserId']
             user_name = resp.get('UserName', '未知用户')
-            
+
             # 存储用户信息到session
             session['user_id'] = user_id
             session['user_name'] = user_name
-            
+
             return redirect('/')
         else:
             return f"❌ 授权失败: {resp.get('errmsg', '未知错误')}"
     except Exception as e:
         return f"❌ 授权异常: {str(e)}"
 
+
 @app.route('/do_sync')
 def do_sync():
     # 检查用户是否已授权
     if 'user_id' not in session:
         return redirect('/')
-    
+
     try:
         token = get_access_token()
         print(f"使用token: {token[:10]}...")  # 调试信息
-        
+
         url = f"https://qyapi.weixin.qq.com/cgi-bin/oa/schedule/add?access_token={token}"
 
         # 这里可以接入数据库或表单获取真实课程数据
@@ -141,14 +148,14 @@ def do_sync():
                 "start_time": start_ts,
                 "end_time": end_ts,
                 "location": mock_data['location'],
-                "reminders": { "is_remind": 1, "remind_before_event_secs": 900 },
-                "attendees": [{ "userid": session['user_id'] }]  # 使用session中的用户ID
+                "reminders": {"is_remind": 1, "remind_before_event_secs": 900},
+                "attendees": [{"userid": session['user_id']}]  # 使用session中的用户ID
             },
-            "agentid": AGENT_ID  # 确保agentid为字符串
+            "agentid": int(AGENT_ID)  # 企业微信schedule/add接口要求agentid为整型，不能是字符串
         }
 
         print(f"发送的请求数据: {json.dumps(data, indent=2)}")  # 调试信息
-        
+
         resp = requests.post(url, json=data).json()
         print(f"schedule/add响应: {json.dumps(resp, indent=2)}")  # 调试信息
 
@@ -159,6 +166,7 @@ def do_sync():
 
     except Exception as e:
         return f"⚠️ 服务器错误: {str(e)}"
+
 
 # ================= 启动配置 =================
 if __name__ == "__main__":
