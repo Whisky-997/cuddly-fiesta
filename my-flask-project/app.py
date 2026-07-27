@@ -86,6 +86,8 @@ def do_sync():
 # 云托管环境会自动分配端口，通过环境变量 PORT 传入
 # 本地调试时默认使用 5000
 if __name__ == "__main__":
+    # 从环境变量读取端口，默认5000（本地调试用）
     port = int(os.environ.get("PORT", 5000))
-    # 必须监听 0.0.0.0 才能被外部访问
+    # 必须监听0.0.0.0，否则云托管无法访问
     app.run(host="0.0.0.0", port=port, debug=True)
+
