@@ -1,15 +1,21 @@
 import os
 import requests
-from flask import Flask, request
+from flask import Flask, request, redirect, session, jsonify
 from datetime import datetime, timedelta
+import uuid
 
 app = Flask(__name__)
+app.secret_key = str(uuid.uuid4())  # 生成随机密钥用于session
 
 # ================= 配置区域 =================
 # 1. 优先从环境变量读取（安全），如果没有则使用默认值（方便本地调试）
 CORP_ID = os.environ.get("CORP_ID", "ww122e71f4c8e0fd1b")
 APP_SECRET = os.environ.get("APP_SECRET", "tCpJb6DdCT3UsQKp1TsGQZP0u6Kvpdxei58qffT5WUQ")
 AGENT_ID = int(os.environ.get("AGENT_ID", "1000003"))
+# 企业微信OAuth2.0配置
+REDIRECT_HOST = os.environ.get("REDIRECT_HOST", "https://flask-d6y7-287928-10-1459300841.sh.run.tcloudbase.com")  # 替换为你的公网域名
+OAUTH2_CALLBACK = f"{REDIRECT_HOST}/oauth_callback"
+OAUTH2_SCOPE = "snsapi_privateinfo"  # 获取用户信息需要这个scope
 # ===========================================
 
 def get_access_token():
@@ -30,25 +36,76 @@ def get_next_week_timestamp(weekday, time_str):
 
 @app.route('/')
 def index():
-    return '''
-    <!DOCTYPE html>
-    <html>
-    <head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>课表同步</title>
-    <style>body{font-family:sans-serif; text-align:center; padding:20px; background-color:#f6f6f6;} .container{background:white; padding:20px; border-radius:10px; margin-top:50px;} h1{color:#333; font-size:20px;} p{color:#666; font-size:14px;} .btn{display:inline-block; background-color:#07C160; color:white; padding:15px 40px; text-decoration:none; border-radius:8px; font-size:18px; margin-top:20px; border:none;}</style>
-    </head>
-    <body><div class="container"><h1>📅 课表同步助手</h1><p>点击下方按钮，自动将下周课程加入日程</p><a href="/do_sync" class="btn">一键同步日程</a></div></body>
-    </html>
-    '''
+    # 检查用户是否已授权
+    if 'user_id' not in session:
+        # 生成state参数防止CSRF攻击
+        state = str(uuid.uuid4())
+        session['oauth2_state'] = state
+        # 构造OAuth2.0授权URL
+        oauth_url = (
+            f"https://open.weixin.qq.com/connect/oauth2/authorize?"
+            f"appid={CORP_ID}&redirect_uri={OAUTH2_CALLBACK}&response_type=code&scope={OAUTH2_SCOPE}&state={state}#wechat_redirect"
+        )
+        return f'''
+        <!DOCTYPE html>
+        <html>
+        <head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>课表同步</title>
+        <style>body{font-family:sans-serif; text-align:center; padding:20px; background-color:#f6f6f6;} .container{background:white; padding:20px; border-radius:10px; margin-top:50px;} h1{color:#333; font-size:20px;} p{color:#666; font-size:14px;} .btn{display:inline-block; background-color:#07C160; color:white; padding:15px 40px; text-decoration:none; border-radius:8px; font-size:18px; margin-top:20px; border:none;}</style>
+        </head>
+        <body><div class="container"><h1>📅 课表同步助手</h1><p>请先授权登录，然后同步课程到日程</p><a href="{oauth_url}" class="btn">授权登录</a></div></body>
+        </html>
+        '''
+    else:
+        return '''
+        <!DOCTYPE html>
+        <html>
+        <head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>课表同步</title>
+        <style>body{font-family:sans-serif; text-align:center; padding:20px; background-color:#f6f6f6;} .container{background:white; padding:20px; border-radius:10px; margin-top:50px;} h1{color:#333; font-size:20px;} p{color:#666; font-size:14px;} .btn{display:inline-block; background-color:#07C160; color:white; padding:15px 40px; text-decoration:none; border-radius:8px; font-size:18px; margin-top:20px; border:none;}</style>
+        </head>
+        <body><div class="container"><h1>📅 课表同步助手</h1><p>已授权用户: {user_name}</p><a href="/do_sync" class="btn">一键同步日程</a></div></body>
+        </html>
+        '''.format(user_name=session.get('user_name', '未知用户'))
+
+@app.route('/oauth_callback')
+def oauth_callback():
+    # 获取授权code和state
+    code = request.args.get('code')
+    state = request.args.get('state')
+    
+    # 验证state防止CSRF攻击
+    if state != session.get('oauth2_state'):
+        return "❌ 授权失败：无效的state参数"
+    
+    # 获取access_token
+    token_url = f"https://qyapi.weixin.qq.com/cgi-bin/user/getuserinfo?access_token={get_access_token()}&code={code}&agentid={AGENT_ID}"
+    resp = requests.get(token_url).json()
+    
+    if resp['errcode'] == 0:
+        # 获取用户信息
+        user_id = resp['UserId']
+        user_name = resp.get('UserName', '未知用户')
+        
+        # 存储用户信息到session
+        session['user_id'] = user_id
+        session['user_name'] = user_name
+        
+        return redirect('/')
+    else:
+        return f"❌ 授权失败: {resp['errmsg']}"
 
 @app.route('/do_sync')
 def do_sync():
+    # 检查用户是否已授权
+    if 'user_id' not in session:
+        return redirect('/')
+    
     try:
         token = get_access_token()
         url = f"https://qyapi.weixin.qq.com/cgi-bin/oa/schedule/add?access_token={token}"
 
-        # 这里的数据你可以后续接入数据库或表单
+        # 这里可以接入数据库或表单获取真实课程数据
+        # 模拟课程数据
         mock_data = {
-            "student_id": "YangZhengJun", # 【重要】记得改成你的企业微信ID
             "course_name": "网络取证",
             "location": "前湖北校区研究生院103",
             "teacher": "黎鹰",
@@ -67,7 +124,7 @@ def do_sync():
                 "end_time": end_ts,
                 "location": mock_data['location'],
                 "reminders": { "is_remind": 1, "remind_before_event_secs": 900 },
-                "attendees": [{ "userid": mock_data['student_id'] }]
+                "attendees": [{ "userid": session['user_id'] }]  # 使用session中的用户ID
             },
             "agentid": AGENT_ID
         }
@@ -83,10 +140,6 @@ def do_sync():
         return f"⚠️ 服务器错误: {str(e)}"
 
 # ================= 启动配置 =================
-# 云托管环境会自动分配端口，通过环境变量 PORT 传入
-# 本地调试时默认使用 5000
 if __name__ == "__main__":
-    # 从环境变量读取端口，默认5000（本地调试用）
-    port = int(os.environ.get("PORT", 80))
-    # 必须监听0.0.0.0，否则云托管无法访问
+    port = int(os.environ.get("PORT", 5000))
     app.run(host="0.0.0.0", port=port, debug=True)
