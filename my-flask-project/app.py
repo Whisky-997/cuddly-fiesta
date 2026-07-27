@@ -48,7 +48,7 @@ def do_sync():
 
         # 这里的数据你可以后续接入数据库或表单
         mock_data = {
-            "student_id": "你的UserID", # 【重要】记得改成你的企业微信ID
+            "student_id": "YangZhengJun", # 【重要】记得改成你的企业微信ID
             "course_name": "网络取证",
             "location": "前湖北校区研究生院103",
             "teacher": "黎鹰",
@@ -87,7 +87,7 @@ def do_sync():
 # 本地调试时默认使用 5000
 if __name__ == "__main__":
     # 从环境变量读取端口，默认5000（本地调试用）
-    port = int(os.environ.get("PORT", 5000))
+    port = int(os.environ.get("PORT", 80))
     # 必须监听0.0.0.0，否则云托管无法访问
     app.run(host="0.0.0.0", port=port, debug=True)
 
